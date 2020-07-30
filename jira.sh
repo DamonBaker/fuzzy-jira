@@ -34,6 +34,7 @@ jira_fetch() {
     [[ ! -f "$PROJECT" ]] && touch "${CACHE}"
     local curl_args=(
         --silent
+        --show-error
         --fail
         --user "${JIRA_USERNAME}:${JIRA_PASSWORD}" 
         --header 'Content-type: application/json'
@@ -56,7 +57,13 @@ search_issues() {
 
 open_issue() {
     echo "Opening issue ${1}"
-    open "${JIRA_DOMAIN}/browse/${1}"
+    case "$(uname)" in
+        (*Linux*) open_cmd='xdg-open' ;;
+        (*Darwin*) open_cmd='open' ;;
+        (*CYGWIN*) open_cmd='cygstart' ;;
+        (*) echo 'Error: unsupported platform'; exit 2
+    esac
+    ${open_cmd} "${JIRA_DOMAIN}/browse/${1}"
 }
 
 parse_ticket_key() {
