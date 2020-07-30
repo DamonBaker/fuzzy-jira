@@ -14,7 +14,7 @@ jira() {
     elif [[ $1 == "." ]]; then
         parse_ticket_key
     elif [[ -n $(echo "$1" | grep -e '[A-Z]\+-[0-9]\+' -o) ]]; then
-        open_issue "$1"
+        open_issue $(tr a-z A-Z <<< "$1")
     else
         if [[ -n "$1" ]]; then
             PROJECT=$(tr a-z A-Z <<< "$1")
