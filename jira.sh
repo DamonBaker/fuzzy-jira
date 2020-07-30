@@ -2,6 +2,8 @@
 
 . ~/fuzzy-jira/.jiraconfig
 
+FLAG_FORCE='false'
+
 jira() {
     if [[ $1 == "fetch" ]]; then
         if [[ -n "$2" ]]; then
@@ -22,7 +24,7 @@ jira() {
             PROJECT=$JIRA_DEFAULT_PROJECT
         fi
         CACHE="${JIRA_CACHE_DIR}/${PROJECT}"
-        [[ ! -f "${CACHE}" ]] && jira_fetch "$PROJECT"
+        [[ ! -f "${CACHE}" || "$FLAG_FORCE" = 'true' ]] && jira_fetch "$PROJECT"
         search_issues "$PROJECT"
     fi
 }
@@ -36,7 +38,7 @@ jira_fetch() {
         --silent
         --show-error
         --fail
-        --user "${JIRA_USERNAME}:${JIRA_PASSWORD}" 
+        --user "${JIRA_USERNAME}:${JIRA_PASSWORD}"
         --header 'Content-type: application/json'
         --request GET "${url}"
     )
@@ -61,7 +63,7 @@ open_issue() {
         (*Linux*) open_cmd='xdg-open' ;;
         (*Darwin*) open_cmd='open' ;;
         (*CYGWIN*) open_cmd='cygstart' ;;
-        (*) echo 'Error: unsupported platform'; exit 2
+        (*) echo 'Error: Unsupported platform'; exit 1
     esac
     ${open_cmd} "${JIRA_DOMAIN}/browse/${1}"
 }
@@ -75,5 +77,16 @@ parse_ticket_key() {
     fi
 }
 
-jira "$1" "$2"
+parse_options() {
+    while getopts 'f' flag; do
+        case "${flag}" in
+            f) FLAG_FORCE='true' ;;
+            *) echo "Error: Unexpected option ${flag}"; exit 1
+        esac
+    done
+    shift $((OPTIND -1))
+    jira "$1" "$2"
+}
+
+parse_options "$@"
 
