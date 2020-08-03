@@ -4,6 +4,10 @@ set -e
 . ~/fuzzy-jira/.jiraconfig
 
 jira() {
+    if [[ -z "$1" ]]; then
+        usage
+        exit 0
+    fi
     if [[ $1 == 'fetch' ]]; then
         if [[ -n "$2" ]]; then
             set_project $2
@@ -74,6 +78,20 @@ parse_git_branch() {
     else
         echo "Could not parse ticket key"
     fi
+}
+
+usage() {
+    echo "Your jira details must be entered in .jiraconfig before using this tool"
+    echo "Usage:"
+    echo "  ./jira.sh fetch <project-key>"
+    echo "  ./jira.sh <project-key>"
+    echo "  ./jira.sh <issue-key>"
+    echo "  ./jira.sh ."
+    echo "Examples:"
+    echo "  ./jira.sh fetch PROJ      Fetch issues for project 'PROJ'"
+    echo "  ./jira.sh PROJ            Search fetched issues within 'PROJ'"
+    echo "  ./jira.sh PROJ-123        Open issue 'PROJ-123' in browser"
+    echo "  ./jira.sh .               Parse current git branch for an issue key and open in browser"
 }
 
 jira "$@"
