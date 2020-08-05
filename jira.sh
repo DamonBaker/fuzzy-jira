@@ -13,6 +13,8 @@ script_absolute_path() {
     SCRIPT_DIR="$(cd -P "$(dirname "$src")" >/dev/null 2>&1 && pwd)"
 }
 
+set -e
+
 script_absolute_path
 
 . "$SCRIPT_DIR"/.jiraconfig
@@ -43,14 +45,16 @@ jira() {
 
 set_project() {
     PROJECT=$(tr a-z A-Z <<< "$1")
-    CACHE="${SCRIPT_DIR}/.cache/${PROJECT}"
+    local cache_dir="${SCRIPT_DIR}/.cache"
+    [[ ! -d "${cache_dir}" ]] && mkdir "${cache_dir}"
+    CACHE="${cache_dir}/${PROJECT}"
 }
 
 fetch_issues() {
     local url="${JIRA_URL}/rest/api/2/search?jql=project=${PROJECT}&fields=summary&maxResults=1000"
     echo "Fetching issues for $PROJECT..."
     echo "From ${url}"
-    [[ ! -f "$PROJECT" ]] && touch "${CACHE}"
+    [[ ! -f "${PROJECT}" ]] && touch "${CACHE}"
     local curl_args=(
         --silent
         --show-error
@@ -76,9 +80,9 @@ fetch_issues() {
 }
 
 search_issues() {
-    [[ ! -f "${CACHE}" ]] && fetch_issues "$PROJECT"
+    [[ ! -f "${CACHE}" ]] && fetch_issues "${PROJECT}"
     local issue=$(< "${CACHE}" fzf --tac | cut -d ' ' -f 1 | cat)
-    [[ -n "$issue" ]] && open_issue "$issue"
+    [[ -n "${issue}" ]] && open_issue "${issue}"
 }
 
 open_issue() {
