@@ -108,15 +108,15 @@ parse_git_branch() {
 usage() {
     echo "Your jira details must be entered in .jiraconfig before using this tool"
     echo "Usage:"
-    echo "  ./jira.sh fetch <project-key>"
-    echo "  ./jira.sh <project-key>"
-    echo "  ./jira.sh <issue-key>"
-    echo "  ./jira.sh ."
+    echo "  jira fetch <project-key>"
+    echo "  jira <project-key>"
+    echo "  jira <issue-key>"
+    echo "  jira ."
     echo "Examples:"
-    echo "  ./jira.sh fetch PROJ      Fetch issues for project 'PROJ'"
-    echo "  ./jira.sh PROJ            Search fetched issues within 'PROJ'"
-    echo "  ./jira.sh PROJ-123        Open issue 'PROJ-123' in browser"
-    echo "  ./jira.sh .               Parse current git branch for an issue key and open in browser"
+    echo "  jira fetch proj      Fetch issues for project 'proj'"
+    echo "  jira proj            Search fetched issues within 'proj'"
+    echo "  jira proj-123        Open issue 'proj-123' in browser"
+    echo "  jira .               Parse current git branch for an issue key and open in browser"
 }
 
 jira "$@"
