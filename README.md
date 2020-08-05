@@ -1,4 +1,4 @@
-# Fuzzy Jira
+# fuzzy-jira
 Fuzzy search a Jira project to quickly identify issues and open them in a web browser. Powered by [fzf](https://github.com/junegunn/fzf)
 
 ## Usage
