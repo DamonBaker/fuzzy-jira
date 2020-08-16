@@ -16,8 +16,6 @@ script_absolute_path() {
 set -e
 
 script_absolute_path
-
-. "$SCRIPT_DIR"/.jiraconfig
 # -----------------------------------------------------------------------
 
 jira() {
@@ -25,7 +23,7 @@ jira() {
         usage
         return 0
     fi
-    check_config
+    read_config
     if [[ $1 == 'fetch' ]]; then
         if [[ -n "$2" ]]; then
             set_project "$2"
@@ -107,9 +105,17 @@ parse_git_branch() {
     fi
 }
 
-check_config() {
+read_config() {
     local config_dir="${SCRIPT_DIR}/.jiraconfig"
-    [[ ! -f "$config_dir" ]] && echo "Could not find .jiraconfig in ${SCRIPT_DIR}" && return 1
+    if [[ ! -f "$config_dir" ]]; then
+        printf '%s\n' \
+            'JIRA_URL=' \
+            'JIRA_USERNAME=' \
+            'JIRA_PASSWORD=' > "$config_dir"
+    fi
+    JIRA_URL=$(awk -F= '/^JIRA_URL/{print $2}' .jiraconfig)
+    JIRA_USERNAME=$(awk -F= '/^JIRA_USERNAME/{print $2}' .jiraconfig)
+    JIRA_PASSWORD=$(awk -F= '/^JIRA_PASSWORD/{print $2}' .jiraconfig)
     if [[ -z "$JIRA_URL" || -z "$JIRA_USERNAME" || -z "$JIRA_PASSWORD" ]]; then
         [[ -z "$JIRA_URL" ]] && echo "JIRA_URL has not been set in ${config_dir}"
         [[ -z "$JIRA_USERNAME" ]] && echo "JIRA_USERNAME has not been set in ${config_dir}"
@@ -132,7 +138,7 @@ usage() {
     echo "  jira proj-123        Open issue 'proj-123' in browser"
     echo "  jira .               Parse current git branch for an issue key and open in browser"
     echo
-    check_config
+    read_config
 }
 
 jira "$@"
