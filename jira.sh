@@ -81,7 +81,11 @@ fetch_issues() {
 
 search_issues() {
     [[ ! -f "${CACHE}" ]] && fetch_issues "${PROJECT}"
-    local issue=$(< "${CACHE}" fzf --tac | cut -d ' ' -f 1 | cat)
+    # Apply bold style to ticket key
+    local colorPrefix='\\033[1m'
+    local colorSuffix='\\033[0m'
+    local regex=$'s/([^ ]+)/'$colorPrefix'\1'$colorSuffix'/'
+    local issue=$(echo -e "$(sed -E "${regex}" "${CACHE}")" | fzf --ansi --tac | cut -d ' ' -f 1 | cat)
     [[ -n "${issue}" ]] && open_issue "${issue}"
 }
 
