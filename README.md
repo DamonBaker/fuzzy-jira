@@ -4,13 +4,14 @@ Fuzzy search a Jira project to quickly identify issues and open them in a web br
 ## Usage
 ```
 jira fetch <project>    # Fetch the last 1000 issues within <project> and cache the result
-jira <project>          # Fuzzy search cached issues within <project>
+jira <project> [-f]     # Fuzzy search cached issues within <project> [-f force fetch]
 jira <issue-key>        # Open the issue <issue-key> in a web browser
 jira .                  # Parse the current git branch for an issue key and open it in a browser
 
 # Examples
 jira fetch proj
 jira proj
+jira proj -f
 jira proj-123
 ```
 

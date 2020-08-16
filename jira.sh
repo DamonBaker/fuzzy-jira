@@ -40,6 +40,7 @@ jira() {
         open_issue "$(tr a-z A-Z <<< "$1")"
     else
         set_project "$1"
+        [[ "${@: -1}" == '-f' ]] && fetch_issues "$PROJECT"
         search_issues "$PROJECT"
     fi
 }
@@ -121,12 +122,13 @@ check_config() {
 usage() {
     echo "Usage:"
     echo "  jira fetch <project-key>"
-    echo "  jira <project-key>"
+    echo "  jira <project-key> [-f]"
     echo "  jira <issue-key>"
     echo "  jira ."
     echo "Examples:"
     echo "  jira fetch proj      Fetch issues for project 'proj'"
     echo "  jira proj            Search fetched issues within 'proj'"
+    echo "  jira proj -f         Fetch issues before performing a search within 'proj'"
     echo "  jira proj-123        Open issue 'proj-123' in browser"
     echo "  jira .               Parse current git branch for an issue key and open in browser"
     echo
