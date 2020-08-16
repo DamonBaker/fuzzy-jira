@@ -25,6 +25,7 @@ jira() {
         usage
         return 0
     fi
+    check_config
     if [[ $1 == 'fetch' ]]; then
         if [[ -n "$2" ]]; then
             set_project "$2"
@@ -105,8 +106,19 @@ parse_git_branch() {
     fi
 }
 
+check_config() {
+    local config_dir="${SCRIPT_DIR}/.jiraconfig"
+    [[ ! -f "$config_dir" ]] && echo "Could not find .jiraconfig in ${SCRIPT_DIR}" && return 1
+    if [[ -z "$JIRA_URL" || -z "$JIRA_USERNAME" || -z "$JIRA_PASSWORD" ]]; then
+        [[ -z "$JIRA_URL" ]] && echo "JIRA_URL has not been set in ${config_dir}"
+        [[ -z "$JIRA_USERNAME" ]] && echo "JIRA_USERNAME has not been set in ${config_dir}"
+        [[ -z "$JIRA_PASSWORD" ]] && echo "JIRA_USERNAME has not been set in ${config_dir}"
+        return 1
+    fi
+    return 0
+}
+
 usage() {
-    echo "Your jira details must be entered in .jiraconfig before using this tool"
     echo "Usage:"
     echo "  jira fetch <project-key>"
     echo "  jira <project-key>"
@@ -117,6 +129,8 @@ usage() {
     echo "  jira proj            Search fetched issues within 'proj'"
     echo "  jira proj-123        Open issue 'proj-123' in browser"
     echo "  jira .               Parse current git branch for an issue key and open in browser"
+    echo
+    check_config
 }
 
 jira "$@"
