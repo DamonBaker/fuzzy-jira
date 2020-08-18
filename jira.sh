@@ -117,9 +117,9 @@ read_config() {
             'JIRA_USERNAME=' \
             'JIRA_PASSWORD=' > "$config_dir"
     fi
-    JIRA_URL=$(awk -F= '/^JIRA_URL/{print $2}' .jiraconfig)
-    JIRA_USERNAME=$(awk -F= '/^JIRA_USERNAME/{print $2}' .jiraconfig)
-    JIRA_PASSWORD=$(awk -F= '/^JIRA_PASSWORD/{print $2}' .jiraconfig)
+    JIRA_URL=$(awk -F= '/^JIRA_URL/{print $2}' ${config_dir})
+    JIRA_USERNAME=$(awk -F= '/^JIRA_USERNAME/{print $2}' ${config_dir})
+    JIRA_PASSWORD=$(awk -F= '/^JIRA_PASSWORD/{print $2}' ${config_dir})
     if [[ -z "$JIRA_URL" || -z "$JIRA_USERNAME" || -z "$JIRA_PASSWORD" ]]; then
         [[ -z "$JIRA_URL" ]] && echo "JIRA_URL has not been set in ${config_dir}"
         [[ -z "$JIRA_USERNAME" ]] && echo "JIRA_USERNAME has not been set in ${config_dir}"
