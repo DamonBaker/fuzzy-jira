@@ -71,7 +71,7 @@ fetch_issues() {
     fi
     local result=$(echo "${response}" \
         | jq -r '.issues[] | .key + " " + .fields.summary' \
-        | join -v 1 <(sort --version-sort -) <(sort --version-sort "${CACHE}") \
+        | sort --version-sort --field-separator=$'\t' --unique --key=1,1 "${CACHE}" - \
         | tee -a "${CACHE}" \
         | wc -l \
         | tr -d ' ')
