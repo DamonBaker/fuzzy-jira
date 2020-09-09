@@ -69,14 +69,13 @@ fetch_issues() {
         [[ -z $(cat "${CACHE}") ]] && rm "${CACHE}"
         return 1
     fi
-    local result=$(echo "${response}" \
+    local wc_old=$(< "${CACHE}" wc -l | tr -d ' ')
+    echo "${response}" \
         | jq -r '.issues[] | .key + " " + .fields.summary' \
-        | sort --version-sort --field-separator=$'\t' --unique --key=1,1 "${CACHE}" - \
-        | tee -a "${CACHE}" \
-        | wc -l \
-        | tr -d ' ')
+        | sort --output="${CACHE}" --version-sort --unique --key=1,1 - "${CACHE}"
+    local wc_new=$(< "${CACHE}" wc -l | tr -d ' ')
     local total=$(< "${CACHE}" wc -l | tr -d ' ')
-    echo "Success: $result issues added to cache (${total} total)"
+    echo "Success: $((wc_new-wc_old)) issues added to cache (${total} total)"
 }
 
 search_issues() {
@@ -117,9 +116,9 @@ read_config() {
             'JIRA_USERNAME=' \
             'JIRA_PASSWORD=' > "$config_dir"
     fi
-    JIRA_URL=$(awk -F= '/^JIRA_URL/{print $2}' ${config_dir})
-    JIRA_USERNAME=$(awk -F= '/^JIRA_USERNAME/{print $2}' ${config_dir})
-    JIRA_PASSWORD=$(awk -F= '/^JIRA_PASSWORD/{print $2}' ${config_dir})
+    JIRA_URL=$(awk -F= '/^JIRA_URL/{print $2}' "${config_dir}")
+    JIRA_USERNAME=$(awk -F= '/^JIRA_USERNAME/{print $2}' "${config_dir}")
+    JIRA_PASSWORD=$(awk -F= '/^JIRA_PASSWORD/{print $2}' "${config_dir}")
     if [[ -z "$JIRA_URL" || -z "$JIRA_USERNAME" || -z "$JIRA_PASSWORD" ]]; then
         [[ -z "$JIRA_URL" ]] && echo "JIRA_URL has not been set in ${config_dir}"
         [[ -z "$JIRA_USERNAME" ]] && echo "JIRA_USERNAME has not been set in ${config_dir}"
