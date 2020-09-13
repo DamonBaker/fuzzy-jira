@@ -37,9 +37,21 @@ jira() {
     elif [[ -n $(echo "$1" | grep -e '[A-Za-z]\+-[0-9]\+' -o) ]]; then
         open_issue "$(tr a-z A-Z <<< "$1")"
     else
+        local flag_fetch='false'
+        local flag_assignee
+
+        for arg in "$@"
+        do
+            if [[ $arg == '-f' || $arg == '--force' ]]; then
+                flag_fetch='true'
+            elif [[ $arg == '-m' || $arg == '--me' ]]; then
+                flag_assignee="${JIRA_USERNAME}"
+            fi
+        done
+
         set_project "$1"
-        [[ "${@: -1}" == '-f' ]] && fetch_issues "$PROJECT"
-        search_issues "$PROJECT"
+        [[ "${flag_fetch}" == 'true' ]] && fetch_issues
+        search_issues "$flag_assignee"
     fi
 }
 
@@ -51,10 +63,10 @@ set_project() {
 }
 
 fetch_issues() {
-    local url="${JIRA_URL}/rest/api/2/search?jql=project=${PROJECT}&fields=summary&maxResults=1000"
+    local url="${JIRA_URL}/rest/api/2/search?jql=project=${PROJECT}&fields=summary,status,assignee&maxResults=1000"
     echo "Fetching issues for $PROJECT..."
     echo "From ${url}"
-    [[ ! -f "${PROJECT}" ]] && touch "${CACHE}"
+    [[ ! -f "${CACHE}" ]] && touch "${CACHE}"
     local curl_args=(
         --silent
         --show-error
@@ -70,22 +82,39 @@ fetch_issues() {
         return 1
     fi
     local wc_old=$(< "${CACHE}" wc -l | tr -d ' ')
-    echo "${response}" \
-        | jq -r '.issues[] | .key + " " + .fields.summary' \
-        | sort --output="${CACHE}" --version-sort --unique --key=1,1 - "${CACHE}"
+    curl "${curl_args[@]}" \
+        | jq --raw-output '.issues[] | .key + "\t" + .fields.status.statusCategory.name + "\t" + (.fields.assignee.name // "Unassigned") + "\t" + .fields.summary' \
+        | sort --output="${CACHE}" --version-sort --field-separator=$'\t' --key=1,1 --unique --reverse - "${CACHE}"
     local wc_new=$(< "${CACHE}" wc -l | tr -d ' ')
-    local total=$(< "${CACHE}" wc -l | tr -d ' ')
-    echo "Success: $((wc_new-wc_old)) issues added to cache (${total} total)"
+    echo "Success: $((wc_new-wc_old)) issues added to cache (${wc_new} total)"
 }
 
 search_issues() {
-    [[ ! -f "${CACHE}" ]] && fetch_issues "${PROJECT}"
-    # Apply bold style to ticket key
-    local colorPrefix='\\033[1m'
-    local colorSuffix='\\033[0m'
-    local regex=$'s/([^ ]+)/'$colorPrefix'\1'$colorSuffix'/'
-    local issue=$(echo -e "$(sed -E "${regex}" "${CACHE}")" | fzf --ansi --tac | cut -d ' ' -f 1 | cat)
+    [[ ! -f "${CACHE}" ]] && fetch_issues
+    local issue=$(echo -e "$(read_cache "$1")" | fzf --ansi | cut -d ' ' -f 1 | cat)
     [[ -n "${issue}" ]] && open_issue "${issue}"
+}
+
+read_cache() {
+    local assignee="$1"
+    local light_grey='\\033[37m' # OPEN
+    local blue='\\033[34m' # IN PROGRESS
+    local green='\\033[32m' # DONE
+    local reset='\\033[0m'
+    local bold='\\033[1m'
+
+    while IFS=$'\t' read -r -a row
+    do
+        local color
+        case ${row[1]} in
+            ("In Progress") color=$blue ;;
+            ("Done") color=$green ;;
+            (*) color=$light_grey ;;
+        esac
+        if [[ -z "$assignee" || "$assignee" == "${row[2]}" ]]; then
+            echo -e "$bold$color${row[0]}$reset ${row[3]}"
+        fi
+    done < "${CACHE}"
 }
 
 open_issue() {
@@ -131,17 +160,30 @@ read_config() {
 usage() {
     echo "Usage:"
     echo "  jira fetch <project-key>"
-    echo "  jira <project-key> [-f]"
+    echo "  jira <project-key> [-m|--me]"
+    echo "  jira <project-key> [-f|--force]"
     echo "  jira <issue-key>"
     echo "  jira ."
+    echo
     echo "Examples:"
     echo "  jira fetch proj      Fetch issues for project 'proj'"
     echo "  jira proj            Search fetched issues within 'proj'"
+    echo "  jira proj -m         Search fetched issues assigned to current user within 'proj'"
     echo "  jira proj -f         Fetch issues before performing a search within 'proj'"
     echo "  jira proj-123        Open issue 'proj-123' in browser"
     echo "  jira .               Parse current git branch for an issue key and open in browser"
     echo
+    echo "Status legend:"
+    echo -e "  \\033[37mKEY-123\\033[0m OPEN"
+    echo -e "  \\033[34mKEY-123\\033[0m IN PROGRESS"
+    echo -e "  \\033[32mKEY-123\\033[0m DONE"
+    echo
     read_config
+
+    local reset='\\033[0m'
+    local light_grey='\\033[37m' # OPEN
+    local blue='\\033[34m' # IN PROGRESS
+    local green='\\033[32m' # DONE
 }
 
 jira "$@"
