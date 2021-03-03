@@ -73,12 +73,14 @@ fetch_issues() {
         --fail
         --user "${JIRA_USERNAME}:${JIRA_PASSWORD}"
         --header 'Content-type: application/json'
+        --header 'Accept: application/json'
         --request GET "${url}"
     )
     local response=$(curl "${curl_args[@]}")
     if [[ -z "$response" ]]; then
         # Remove empty cache on error
         [[ -z $(cat "${CACHE}") ]] && rm "${CACHE}"
+        echo "Error: No issues returned"
         return 1
     fi
     local wc_old=$(< "${CACHE}" wc -l | tr -d ' ')
@@ -86,7 +88,7 @@ fetch_issues() {
         | jq --raw-output '.issues[] | .key + "\t" + .fields.status.statusCategory.name + "\t" + (.fields.assignee.name // "Unassigned") + "\t" + .fields.summary' \
         | sort --output="${CACHE}" --version-sort --field-separator=$'\t' --key=1,1 --unique --reverse - "${CACHE}"
     local wc_new=$(< "${CACHE}" wc -l | tr -d ' ')
-    echo "Success: $((wc_new-wc_old)) issues added to cache (${wc_new} total)"
+    echo "Success: $((wc_new - wc_old)) issues added to cache (${wc_new} total)"
 }
 
 search_issues() {
