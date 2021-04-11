@@ -31,7 +31,10 @@ jira() {
             echo 'Please specify a project to fetch from'
             return 1
         fi
-        fetch_issues "$PROJECT"
+        if [[ $3 == '-a' || $3 == '--all' ]]; then
+            local paging_start="0"
+        fi
+        fetch_issues "$paging_start"
     elif [[ $1 == '.' ]]; then
         parse_git_branch
     elif [[ -n $(echo "$1" | grep -e '[A-Za-z]\+-[0-9]\+' -o) ]]; then
@@ -64,9 +67,16 @@ set_project() {
 
 fetch_issues() {
     local url="${JIRA_URL}/rest/api/2/search?jql=project=${PROJECT}&fields=summary,status,assignee&maxResults=1000"
-    echo "Fetching issues for $PROJECT..."
+    if [[ -n "$1" ]]; then 
+        # If start_at arg is present requests will be paginated
+        local paging_start="$1"
+        url="${url}&startAt=${paging_start}"
+    else
+        # Otherwise only retrieve the latest issues
+        echo "Fetching issues for $PROJECT..."
+    fi
     echo "From ${url}"
-    [[ ! -f "${CACHE}" ]] && touch "${CACHE}"
+
     local curl_args=(
         --silent
         --show-error
@@ -78,23 +88,36 @@ fetch_issues() {
     )
     local response=$(curl "${curl_args[@]}")
     if [[ -z "$response" ]]; then
-        # Remove empty cache on error
-        [[ -z $(cat "${CACHE}") ]] && rm "${CACHE}"
         echo "Error: No issues returned"
         return 1
     fi
-    local wc_old=$(< "${CACHE}" wc -l | tr -d ' ')
-    curl "${curl_args[@]}" \
-        | jq --raw-output '.issues[] | .key + "\t" + .fields.status.statusCategory.name + "\t" + (.fields.assignee.name // "Unassigned") + "\t" + .fields.summary' \
-        | sort --output="${CACHE}" --version-sort --field-separator=$'\t' --key=1,1 --unique --reverse - "${CACHE}"
-    local wc_new=$(< "${CACHE}" wc -l | tr -d ' ')
-    echo "Success: $((wc_new - wc_old)) issues added to cache (${wc_new} total)"
+
+    local issues=$(echo "${response}" \
+        | jq --raw-output '.issues[] | .key + "\t" + .fields.status.statusCategory.name + "\t" + (.fields.assignee.name // "Unassigned") + "\t" + .fields.summary')
+    echo "${issues}" | save_cache
+
+    if [[ -n "${paging_start}" && -n "${issues}" ]]; then
+        read start_at max_results total <<< $(echo "${response}" | jq --raw-output '.startAt, .maxResults, .total')
+        paging_start=$((start_at + max_results))
+        if (( paging_start <= total )); then
+            echo "$((total - start_at)) issues remaining"
+            fetch_issues "${paging_start}"
+        fi
+    fi
 }
 
 search_issues() {
     [[ ! -f "${CACHE}" ]] && fetch_issues
     local issue=$(echo -e "$(read_cache "$1")" | fzf --ansi | cut -d ' ' -f 1 | cat)
     [[ -n "${issue}" ]] && open_issue "${issue}"
+}
+
+save_cache() {
+    [[ ! -f "${CACHE}" ]] && touch "${CACHE}"
+    local wc_old=$(< "${CACHE}" wc -l | tr -d ' ')
+    < /dev/stdin sort --output="${CACHE}" --version-sort --field-separator=$'\t' --key=1,1 --unique --reverse - "${CACHE}"
+    local wc_new=$(< "${CACHE}" wc -l | tr -d ' ')
+    echo "Success: $((wc_new - wc_old)) issues added to cache (${wc_new} total)"
 }
 
 read_cache() {
