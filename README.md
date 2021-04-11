@@ -1,5 +1,7 @@
 # fuzzy-jira
-Fuzzy search a Jira project to quickly identify issues and open them in a web browser. Powered by [fzf](https://github.com/junegunn/fzf)
+Fuzzy search a Jira project to quickly identify issues and open them in a web browser. Powered by [fzf](https://github.com/junegunn/fzf).
+
+![fuzzy-jira](https://user-images.githubusercontent.com/7334346/114291642-b3246200-9abb-11eb-81c9-273e6d6b5b99.gif "Data source: jira.atlassian.com")
 
 ## Usage
 ```
@@ -27,7 +29,7 @@ ln -s ~/fuzzy-jira/jira.sh /usr/local/bin/jira
 Edit your `/fuzzy-jira/.jiraconfig`
 ```
 # Example
-JIRA_URL=https://<domain>.atlassian.com
+JIRA_URL=https://<domain>.atlassian.net
 JIRA_USERNAME=<jira-username>
 JIRA_PASSWORD=<password/api-token>
 ```
