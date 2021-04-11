@@ -184,19 +184,20 @@ read_config() {
 
 usage() {
     echo "Usage:"
-    echo "  jira fetch <project-key>"
+    echo "  jira fetch <project-key> [-a|--all]"
     echo "  jira <project-key> [-m|--me]"
     echo "  jira <project-key> [-f|--force]"
     echo "  jira <issue-key>"
     echo "  jira ."
     echo
     echo "Examples:"
-    echo "  jira fetch proj      Fetch issues for project 'proj'"
-    echo "  jira proj            Search fetched issues within 'proj'"
-    echo "  jira proj -m         Search fetched issues assigned to current user within 'proj'"
-    echo "  jira proj -f         Fetch issues before performing a search within 'proj'"
-    echo "  jira proj-123        Open issue 'proj-123' in browser"
-    echo "  jira .               Parse current git branch for an issue key and open in browser"
+    echo "  jira fetch proj          Fetch issues for project 'proj'"
+    echo "  jira fetch proj --all    Fetch ALL issues for project 'proj' (paginated)"
+    echo "  jira proj                Search fetched issues within 'proj'"
+    echo "  jira proj --me           Search fetched issues assigned to current user within 'proj'"
+    echo "  jira proj --force        Fetch issues before performing a search within 'proj'"
+    echo "  jira proj-123            Open issue 'proj-123' in browser"
+    echo "  jira .                   Parse current git branch for an issue key and open in browser"
     echo
     echo "Status legend:"
     echo -e "  \\033[37mKEY-123\\033[0m OPEN"
