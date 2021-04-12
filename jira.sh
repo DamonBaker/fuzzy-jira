@@ -70,12 +70,16 @@ fetch_issues() {
     if [[ -n "$1" ]]; then 
         # If start_at arg is present requests will be paginated
         local paging_start="$1"
+        if [[ "$paging_start" == "0" ]]; then
+            echo "Fetching ALL issues for $PROJECT. This may take some time depending on the max result limit"
+            echo
+        fi
         url="${url}&startAt=${paging_start}"
     else
         # Otherwise only retrieve the latest issues
         echo "Fetching issues for $PROJECT..."
+        echo "From ${url}"
     fi
-    echo "From ${url}"
 
     local curl_args=(
         --silent
@@ -92,8 +96,11 @@ fetch_issues() {
         return 1
     fi
 
-    local issues=$(echo "${response}" \
-        | jq --raw-output '.issues[] | .key + "\t" + .fields.status.statusCategory.name + "\t" + (.fields.assignee.name // "Unassigned") + "\t" + .fields.summary')
+    local jq_query='.issues[] | .key + "\t" 
+        + .fields.status.statusCategory.name + "\t" 
+        + (.fields.assignee.name // .fields.assignee.emailAddress // "Unassigned") + "\t" 
+        + .fields.summary'
+    local issues=$(echo "${response}" | jq --raw-output "${jq_query}")
     echo "${issues}" | save_cache
 
     if [[ -n "${paging_start}" && -n "${issues}" ]]; then
@@ -117,14 +124,14 @@ save_cache() {
     local wc_old=$(< "${CACHE}" wc -l | tr -d ' ')
     < /dev/stdin sort --output="${CACHE}" --version-sort --field-separator=$'\t' --key=1,1 --unique --reverse - "${CACHE}"
     local wc_new=$(< "${CACHE}" wc -l | tr -d ' ')
-    echo "Success: $((wc_new - wc_old)) issues added to cache (${wc_new} total)"
+    echo "Success: $((wc_new - wc_old)) new issues added to cache (${wc_new} total)"
 }
 
 read_cache() {
     local assignee="$1"
     local light_grey='\\033[37m' # OPEN
-    local blue='\\033[34m' # IN PROGRESS
-    local green='\\033[32m' # DONE
+    local blue='\\033[34m'       # IN PROGRESS
+    local green='\\033[32m'      # DONE
     local reset='\\033[0m'
     local bold='\\033[1m'
 
