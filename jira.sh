@@ -67,7 +67,7 @@ set_project() {
 
 fetch_issues() {
     local url="${JIRA_URL}/rest/api/2/search?jql=project=${PROJECT}&fields=summary,status,assignee&maxResults=1000"
-    if [[ -n "$1" ]]; then 
+    if [[ -n "$1" ]]; then
         # If start_at arg is present requests will be paginated
         local paging_start="$1"
         if [[ "$paging_start" == "0" ]]; then
@@ -96,15 +96,15 @@ fetch_issues() {
         return 1
     fi
 
-    local jq_query='.issues[] | .key + "\t" 
-        + .fields.status.statusCategory.name + "\t" 
-        + (.fields.assignee.name // .fields.assignee.emailAddress // "Unassigned") + "\t" 
+    local jq_query='.issues[] | .key + "\t"
+        + .fields.status.statusCategory.name + "\t"
+        + (.fields.assignee.name // .fields.assignee.emailAddress // "Unassigned") + "\t"
         + .fields.summary'
     local issues=$(echo "${response}" | jq --raw-output "${jq_query}")
     echo "${issues}" | save_cache
 
     if [[ -n "${paging_start}" && -n "${issues}" ]]; then
-        read start_at max_results total <<< $(echo "${response}" | jq --raw-output '.startAt, .maxResults, .total')
+        read -r start_at max_results total <<< $(echo "${response}" | jq --raw-output '.startAt, .maxResults, .total')
         paging_start=$((start_at + max_results))
         if (( paging_start <= total )); then
             echo "$((total - start_at)) issues remaining"
@@ -144,9 +144,9 @@ read_cache() {
             (*) color=$light_grey ;;
         esac
         if [[ -z "$assignee" || "$assignee" == "${row[2]}" ]]; then
-            echo -e "$bold$color${row[0]}$reset ${row[3]}"
+            echo -e "$bold$color${row[0]}$reset\t${row[3]}"
         fi
-    done < "${CACHE}"
+    done < "${CACHE}" | column -s$'\t' -t
 }
 
 open_issue() {
