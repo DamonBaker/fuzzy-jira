@@ -18,11 +18,32 @@ set -e
 script_absolute_path
 # -----------------------------------------------------------------------
 
+# Check for required dependencies
+check_dependencies() {
+    local missing_deps=()
+    
+    for cmd in curl jq fzf; do
+        if ! command -v "$cmd" >/dev/null 2>&1; then
+            missing_deps+=("$cmd")
+        fi
+    done
+    
+    if [[ ${#missing_deps[@]} -gt 0 ]]; then
+        echo "Error: Missing required dependencies: ${missing_deps[*]}"
+        echo "Please install them before using this tool."
+        echo "See README.md for installation instructions."
+        return 1
+    fi
+    return 0
+}
+
+# Main entry point for the jira command
 jira() {
     if [[ -z "$1" ]]; then
         usage
         return 0
     fi
+    check_dependencies || return 1
     read_config
     if [[ $1 == 'fetch' ]]; then
         if [[ -n "$2" ]]; then
@@ -37,8 +58,8 @@ jira() {
         fetch_issues "$paging_start"
     elif [[ $1 == '.' ]]; then
         parse_git_branch
-    elif [[ -n $(echo "$1" | grep -e '[A-Za-z]\+-[0-9]\+' -o) ]]; then
-        open_issue "$(tr a-z A-Z <<< "$1")"
+    elif echo "$1" | grep -q -e '[A-Za-z]\+-[0-9]\+'; then
+        open_issue "$(tr '[:lower:]' '[:upper:]' <<< "$1")"
     else
         local flag_fetch='false'
         local flag_assignee
@@ -58,13 +79,17 @@ jira() {
     fi
 }
 
+# Set the project key and cache location
 set_project() {
-    PROJECT=$(tr a-z A-Z <<< "$1")
+    PROJECT=$(tr '[:lower:]' '[:upper:]' <<< "$1")
     local cache_dir="${SCRIPT_DIR}/.cache"
     [[ ! -d "${cache_dir}" ]] && mkdir "${cache_dir}"
     CACHE="${cache_dir}/${PROJECT}"
 }
 
+# Fetch issues from JIRA API and cache them
+# Arguments:
+#   $1 - (optional) Starting position for pagination
 fetch_issues() {
     local url="${JIRA_URL}/rest/api/2/search?jql=project=${PROJECT}&fields=summary,status,assignee&maxResults=1000"
     if [[ -n "$1" ]]; then
@@ -90,7 +115,12 @@ fetch_issues() {
         --header 'Accept: application/json'
         --request GET "${url}"
     )
-    local response=$(curl "${curl_args[@]}")
+    local response
+    if ! response=$(curl "${curl_args[@]}" 2>&1); then
+        echo "Error: Failed to fetch issues from JIRA"
+        echo "${response}"
+        return 1
+    fi
     if [[ -z "$response" ]]; then
         echo "Error: No issues returned"
         return 1
@@ -100,11 +130,16 @@ fetch_issues() {
         + .fields.status.statusCategory.name + "\t"
         + (.fields.assignee.name // .fields.assignee.emailAddress // "Unassigned") + "\t"
         + .fields.summary'
-    local issues=$(echo "${response}" | jq --raw-output "${jq_query}")
+    local issues
+    if ! issues=$(echo "${response}" | jq --raw-output "${jq_query}" 2>&1); then
+        echo "Error: Failed to parse JIRA response"
+        echo "${issues}"
+        return 1
+    fi
     echo "${issues}" | save_cache
 
     if [[ -n "${paging_start}" && -n "${issues}" ]]; then
-        read -r start_at max_results total <<< $(echo "${response}" | jq --raw-output '.startAt, .maxResults, .total')
+        read -r start_at max_results total <<< "$(echo "${response}" | jq --raw-output '.startAt, .maxResults, .total')"
         paging_start=$((start_at + max_results))
         if (( paging_start <= total )); then
             echo "$((total - start_at)) issues remaining"
@@ -113,20 +148,30 @@ fetch_issues() {
     fi
 }
 
+# Search cached issues using fzf and open the selected one
+# Arguments:
+#   $1 - (optional) Filter by assignee username
 search_issues() {
     [[ ! -f "${CACHE}" ]] && fetch_issues
-    local issue=$(echo -e "$(read_cache "$1")" | fzf --ansi | cut -d ' ' -f 1 | cat)
+    local issue
+    issue=$(echo -e "$(read_cache "$1")" | fzf --ansi | cut -d ' ' -f 1 | cat)
     [[ -n "${issue}" ]] && open_issue "${issue}"
 }
 
+# Save issues to cache file, merging with existing data
 save_cache() {
     [[ ! -f "${CACHE}" ]] && touch "${CACHE}"
-    local wc_old=$(< "${CACHE}" wc -l | tr -d ' ')
+    local wc_old
+    wc_old=$(< "${CACHE}" wc -l | tr -d ' ')
     < /dev/stdin sort --output="${CACHE}" --version-sort --field-separator=$'\t' --key=1,1 --unique --reverse - "${CACHE}"
-    local wc_new=$(< "${CACHE}" wc -l | tr -d ' ')
+    local wc_new
+    wc_new=$(< "${CACHE}" wc -l | tr -d ' ')
     echo "Success: $((wc_new - wc_old)) new issues added to cache (${wc_new} total)"
 }
 
+# Read and format cached issues with color coding
+# Arguments:
+#   $1 - (optional) Filter by assignee username
 read_cache() {
     local assignee="$1"
     local light_grey='\\033[37m' # OPEN
@@ -149,26 +194,46 @@ read_cache() {
     done < "${CACHE}" | column -s$'\t' -t
 }
 
+# Open an issue in the default web browser
+# Arguments:
+#   $1 - Issue key (e.g., PROJ-123)
 open_issue() {
     echo "Opening issue ${1}"
+    local open_cmd
     case "$(uname)" in
         (*Linux*) open_cmd='xdg-open' ;;
         (*Darwin*) open_cmd='open' ;;
         (*CYGWIN*) open_cmd='cygstart' ;;
-        (*) echo 'Error: Unsupported platform'; return 1
+        (*) 
+            echo 'Error: Unsupported platform'
+            return 1
+            ;;
     esac
+    
+    if ! command -v "${open_cmd}" >/dev/null 2>&1; then
+        echo "Error: ${open_cmd} command not found"
+        return 1
+    fi
+    
     ${open_cmd} "${JIRA_URL}/browse/${1}"
 }
 
+# Parse current git branch for a JIRA issue key and open it
 parse_git_branch() {
-    local key=$(git describe --contains --all | grep -e '[A-Z]\+-[0-9]\+' -o)
+    local key
+    if ! key=$(git describe --contains --all 2>/dev/null | grep -e '[A-Z]\+-[0-9]\+' -o); then
+        echo "Could not parse ticket key from git branch"
+        return 1
+    fi
     if [[ -n "$key" ]]; then
         open_issue "$key"
     else
         echo "Could not parse ticket key"
+        return 1
     fi
 }
 
+# Read and validate JIRA configuration from .jiraconfig file
 read_config() {
     local config_dir="${SCRIPT_DIR}/.jiraconfig"
     if [[ ! -f "$config_dir" ]]; then
@@ -183,12 +248,13 @@ read_config() {
     if [[ -z "$JIRA_URL" || -z "$JIRA_USERNAME" || -z "$JIRA_PASSWORD" ]]; then
         [[ -z "$JIRA_URL" ]] && echo "JIRA_URL has not been set in ${config_dir}"
         [[ -z "$JIRA_USERNAME" ]] && echo "JIRA_USERNAME has not been set in ${config_dir}"
-        [[ -z "$JIRA_PASSWORD" ]] && echo "JIRA_USERNAME has not been set in ${config_dir}"
+        [[ -z "$JIRA_PASSWORD" ]] && echo "JIRA_PASSWORD has not been set in ${config_dir}"
         return 1
     fi
     return 0
 }
 
+# Display usage information and examples
 usage() {
     echo "Usage:"
     echo "  jira fetch <project-key> [-a|--all]"
@@ -212,11 +278,6 @@ usage() {
     echo -e "  \\033[32mKEY-123\\033[0m DONE"
     echo
     read_config
-
-    local reset='\\033[0m'
-    local light_grey='\\033[37m' # OPEN
-    local blue='\\033[34m' # IN PROGRESS
-    local green='\\033[32m' # DONE
 }
 
 jira "$@"
