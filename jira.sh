@@ -18,6 +18,7 @@ set -e
 script_absolute_path
 # -----------------------------------------------------------------------
 
+# Main entry point for the jira command
 jira() {
     if [[ -z "$1" ]]; then
         usage
@@ -58,6 +59,7 @@ jira() {
     fi
 }
 
+# Set the project key and cache location
 set_project() {
     PROJECT=$(tr '[:lower:]' '[:upper:]' <<< "$1")
     local cache_dir="${SCRIPT_DIR}/.cache"
@@ -65,6 +67,9 @@ set_project() {
     CACHE="${cache_dir}/${PROJECT}"
 }
 
+# Fetch issues from JIRA API and cache them
+# Arguments:
+#   $1 - (optional) Starting position for pagination
 fetch_issues() {
     local url="${JIRA_URL}/rest/api/2/search?jql=project=${PROJECT}&fields=summary,status,assignee&maxResults=1000"
     if [[ -n "$1" ]]; then
@@ -91,7 +96,11 @@ fetch_issues() {
         --request GET "${url}"
     )
     local response
-    response=$(curl "${curl_args[@]}")
+    if ! response=$(curl "${curl_args[@]}" 2>&1); then
+        echo "Error: Failed to fetch issues from JIRA"
+        echo "${response}"
+        return 1
+    fi
     if [[ -z "$response" ]]; then
         echo "Error: No issues returned"
         return 1
@@ -102,7 +111,11 @@ fetch_issues() {
         + (.fields.assignee.name // .fields.assignee.emailAddress // "Unassigned") + "\t"
         + .fields.summary'
     local issues
-    issues=$(echo "${response}" | jq --raw-output "${jq_query}")
+    if ! issues=$(echo "${response}" | jq --raw-output "${jq_query}" 2>&1); then
+        echo "Error: Failed to parse JIRA response"
+        echo "${issues}"
+        return 1
+    fi
     echo "${issues}" | save_cache
 
     if [[ -n "${paging_start}" && -n "${issues}" ]]; then
@@ -115,6 +128,9 @@ fetch_issues() {
     fi
 }
 
+# Search cached issues using fzf and open the selected one
+# Arguments:
+#   $1 - (optional) Filter by assignee username
 search_issues() {
     [[ ! -f "${CACHE}" ]] && fetch_issues
     local issue
@@ -122,6 +138,7 @@ search_issues() {
     [[ -n "${issue}" ]] && open_issue "${issue}"
 }
 
+# Save issues to cache file, merging with existing data
 save_cache() {
     [[ ! -f "${CACHE}" ]] && touch "${CACHE}"
     local wc_old
@@ -132,6 +149,9 @@ save_cache() {
     echo "Success: $((wc_new - wc_old)) new issues added to cache (${wc_new} total)"
 }
 
+# Read and format cached issues with color coding
+# Arguments:
+#   $1 - (optional) Filter by assignee username
 read_cache() {
     local assignee="$1"
     local light_grey='\\033[37m' # OPEN
@@ -154,6 +174,9 @@ read_cache() {
     done < "${CACHE}" | column -s$'\t' -t
 }
 
+# Open an issue in the default web browser
+# Arguments:
+#   $1 - Issue key (e.g., PROJ-123)
 open_issue() {
     echo "Opening issue ${1}"
     case "$(uname)" in
@@ -165,6 +188,7 @@ open_issue() {
     ${open_cmd} "${JIRA_URL}/browse/${1}"
 }
 
+# Parse current git branch for a JIRA issue key and open it
 parse_git_branch() {
     local key
     key=$(git describe --contains --all | grep -e '[A-Z]\+-[0-9]\+' -o)
@@ -175,6 +199,7 @@ parse_git_branch() {
     fi
 }
 
+# Read and validate JIRA configuration from .jiraconfig file
 read_config() {
     local config_dir="${SCRIPT_DIR}/.jiraconfig"
     if [[ ! -f "$config_dir" ]]; then
@@ -195,6 +220,7 @@ read_config() {
     return 0
 }
 
+# Display usage information and examples
 usage() {
     echo "Usage:"
     echo "  jira fetch <project-key> [-a|--all]"
