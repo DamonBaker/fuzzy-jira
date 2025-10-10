@@ -18,12 +18,32 @@ set -e
 script_absolute_path
 # -----------------------------------------------------------------------
 
+# Check for required dependencies
+check_dependencies() {
+    local missing_deps=()
+    
+    for cmd in curl jq fzf; do
+        if ! command -v "$cmd" >/dev/null 2>&1; then
+            missing_deps+=("$cmd")
+        fi
+    done
+    
+    if [[ ${#missing_deps[@]} -gt 0 ]]; then
+        echo "Error: Missing required dependencies: ${missing_deps[*]}"
+        echo "Please install them before using this tool."
+        echo "See README.md for installation instructions."
+        return 1
+    fi
+    return 0
+}
+
 # Main entry point for the jira command
 jira() {
     if [[ -z "$1" ]]; then
         usage
         return 0
     fi
+    check_dependencies || return 1
     read_config
     if [[ $1 == 'fetch' ]]; then
         if [[ -n "$2" ]]; then
@@ -179,23 +199,37 @@ read_cache() {
 #   $1 - Issue key (e.g., PROJ-123)
 open_issue() {
     echo "Opening issue ${1}"
+    local open_cmd
     case "$(uname)" in
         (*Linux*) open_cmd='xdg-open' ;;
         (*Darwin*) open_cmd='open' ;;
         (*CYGWIN*) open_cmd='cygstart' ;;
-        (*) echo 'Error: Unsupported platform'; return 1
+        (*) 
+            echo 'Error: Unsupported platform'
+            return 1
+            ;;
     esac
+    
+    if ! command -v "${open_cmd}" >/dev/null 2>&1; then
+        echo "Error: ${open_cmd} command not found"
+        return 1
+    fi
+    
     ${open_cmd} "${JIRA_URL}/browse/${1}"
 }
 
 # Parse current git branch for a JIRA issue key and open it
 parse_git_branch() {
     local key
-    key=$(git describe --contains --all | grep -e '[A-Z]\+-[0-9]\+' -o)
+    if ! key=$(git describe --contains --all 2>/dev/null | grep -e '[A-Z]\+-[0-9]\+' -o); then
+        echo "Could not parse ticket key from git branch"
+        return 1
+    fi
     if [[ -n "$key" ]]; then
         open_issue "$key"
     else
         echo "Could not parse ticket key"
+        return 1
     fi
 }
 
